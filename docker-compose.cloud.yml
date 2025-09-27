@@ -118,6 +118,7 @@ services:
       - AXIOM_TOKEN=${AXIOM_TOKEN}
       - MAPBOX_TOKEN=${MAPBOX_TOKEN}
       - TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET_KEY}
+      - IPAPI_KEY=${IPAPI_KEY}
     depends_on:
       clickhouse:
         condition: service_healthy

@@ -267,7 +267,7 @@ server.addHook("onRequest", async (request, reply) => {
     const session = await getSessionFromReq(request);
 
     if (!session) {
-      return reply.status(401).send({ error: "Unauthorized 1" });
+      return reply.status(401).send({ error: "Unauthorized" });
     }
 
     // Attach session user info to request
