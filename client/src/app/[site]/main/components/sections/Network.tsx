@@ -6,6 +6,9 @@ import { useSubdivisions } from "../../../../../lib/geo";
 import { StandardSection } from "../../../components/shared/StandardSection/StandardSection";
 import { Expand } from "lucide-react";
 import { Button } from "../../../../../components/ui/button";
+import { Favicon } from "../../../../../components/Favicon";
+import { Crawler } from "../../../components/shared/icons/Crawler";
+import { VPN } from "../../../components/shared/icons/VPN";
 
 type Tab =
   | "vpn"
@@ -32,9 +35,9 @@ export function Network() {
           <div className="flex flex-row gap-2 justify-between items-center">
             <div className="overflow-x-auto">
               <TabsList>
-                <TabsTrigger value="vpn">VPN</TabsTrigger>
-                <TabsTrigger value="crawler">Crawler</TabsTrigger>
-                <TabsTrigger value="datacenter">Datacenter</TabsTrigger>
+                <TabsTrigger value="vpn">VPNs</TabsTrigger>
+                <TabsTrigger value="crawler">Crawlers</TabsTrigger>
+                <TabsTrigger value="datacenter">Datacenters</TabsTrigger>
                 <TabsTrigger value="company">Company</TabsTrigger>
                 <TabsTrigger value="company_type">Company Type</TabsTrigger>
                 <TabsTrigger value="company_domain">Company Domain</TabsTrigger>
@@ -58,7 +61,14 @@ export function Network() {
               getFilterLabel={e => e.value}
               expanded={expanded}
               close={close}
-              getLabel={e => e.value}
+              getLabel={e => {
+                return (
+                  <div className="flex gap-2 items-center">
+                    <VPN vpn={e.value} />
+                    {e.value}
+                  </div>
+                );
+              }}
             />
           </TabsContent>
           <TabsContent value="crawler">
@@ -70,7 +80,14 @@ export function Network() {
               getFilterLabel={e => e.value}
               expanded={expanded}
               close={close}
-              getLabel={e => e.value}
+              getLabel={e => {
+                return (
+                  <div className="flex gap-2 items-center">
+                    <Crawler crawler={e.value} />
+                    {e.value}
+                  </div>
+                );
+              }}
             />
           </TabsContent>
           <TabsContent value="datacenter">
@@ -118,7 +135,13 @@ export function Network() {
               getFilterLabel={e => e.value}
               expanded={expanded}
               close={close}
-              getLabel={e => e.value}
+              getLink={e => `https://${e.value}`}
+              getLabel={e => (
+                <div className="flex items-center">
+                  <Favicon domain={e.value} className="w-4 mr-2" />
+                  {e.value ? e.value : "Unknown"}
+                </div>
+              )}
             />
           </TabsContent>
           <TabsContent value="asn_org">
@@ -154,7 +177,13 @@ export function Network() {
               getFilterLabel={e => e.value}
               expanded={expanded}
               close={close}
-              getLabel={e => e.value}
+              getLink={e => `https://${e.value}`}
+              getLabel={e => (
+                <div className="flex items-center">
+                  <Favicon domain={e.value} className="w-4 mr-2" />
+                  {e.value ? e.value : "Unknown"}
+                </div>
+              )}
             />
           </TabsContent>
         </Tabs>
