@@ -336,27 +336,37 @@ class WeeklyReportService {
         .where(eq(member.organizationId, report.organizationId));
 
       this.logger.info(
-        { organizationId: report.organizationId, memberCount: members.length },
+        { organizationId: report.organizationId, memberCount: members.length, siteCount: report.sites.length },
         "Sending reports to organization members"
       );
 
-      // Send email to each member
+      // Send a separate email for each site to each member
       for (const memberData of members) {
-        try {
-          if (memberData.email !== "bill2@gmail.com") {
-            continue;
+        if (memberData.email !== "bill2@gmail.com") {
+          continue;
+        }
+
+        for (const site of report.sites) {
+          try {
+            // Create a report with just this single site
+            const singleSiteReport: OrganizationReport = {
+              organizationId: report.organizationId,
+              organizationName: report.organizationName,
+              sites: [site],
+            };
+
+            await sendWeeklyReportEmail(memberData.email, memberData.name, singleSiteReport);
+            this.logger.info(
+              { email: memberData.email, organizationId: report.organizationId, siteId: site.siteId, siteName: site.siteName },
+              "Sent weekly report email for site"
+            );
+          } catch (error) {
+            console.info(String(error));
+            this.logger.error(
+              { error, email: memberData.email, organizationId: report.organizationId, siteId: site.siteId },
+              "Failed to send email to member for site"
+            );
           }
-          await sendWeeklyReportEmail(memberData.email, memberData.name, report);
-          this.logger.info(
-            { email: memberData.email, organizationId: report.organizationId },
-            "Sent weekly report email"
-          );
-        } catch (error) {
-          console.info(String(error));
-          this.logger.error(
-            { error, email: memberData.email, organizationId: report.organizationId },
-            "Failed to send email to member"
-          );
         }
       }
     } catch (error) {

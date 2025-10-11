@@ -82,5 +82,7 @@ export const sendWeeklyReportEmail = async (
     })
   );
 
-  await sendEmail(email, `Weekly Analytics Report - ${organizationReport.organizationName}`, html);
+  const subject = `Weekly Analytics Report - ${organizationReport.sites[0].siteName}`;
+
+  await sendEmail(email, subject, html);
 };
