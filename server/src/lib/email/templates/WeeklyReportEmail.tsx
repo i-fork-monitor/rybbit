@@ -12,11 +12,37 @@ import {
   pixelBasedPreset,
 } from "@react-email/components";
 import * as React from "react";
-import type { OrganizationReport } from "../../../services/weeklyReportTypes.js";
+import type { OrganizationReport, SingleColData } from "../../../services/weeklyReportTypes.js";
 
 interface WeeklyReportEmailProps {
   userName: string;
   organizationReport: OrganizationReport;
+}
+
+interface MetricCardProps {
+  label: string;
+  currentValue: string;
+  growth: string;
+  isPositive: boolean;
+}
+
+interface TopListItemProps {
+  value: string;
+  percentage: number | null;
+  count: number;
+  barWidth: number;
+  isLast: boolean;
+  favicon?: string;
+  labelClassName?: string;
+}
+
+interface TopListSectionProps {
+  title: string;
+  items: SingleColData[];
+  renderLabel: (item: SingleColData) => React.ReactNode;
+  showFavicon?: boolean;
+  labelClassName?: string;
+  className?: string;
 }
 
 const calculateGrowth = (current: number | null | undefined, previous: number | null | undefined): string => {
@@ -81,6 +107,98 @@ const getCountryDisplay = (countryCode: string): string => {
   }
 };
 
+const MetricCard = ({ label, currentValue, growth, isPositive }: MetricCardProps) => (
+  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
+    <Text className="text-mutedText text-xs mb-1 mt-0">{label}</Text>
+    <div className="flex items-baseline gap-2">
+      <Text className="text-darkText text-2xl font-bold m-0">{currentValue}</Text>
+      <Text className={`text-xs font-medium m-0 ${isPositive ? "text-positive" : "text-negative"}`}>{growth}</Text>
+    </div>
+  </div>
+);
+
+const TopListItem = ({ value, percentage, count, barWidth, isLast, favicon, labelClassName }: TopListItemProps) => (
+  <div
+    style={{
+      position: "relative",
+      height: "24px",
+      display: "flex",
+      alignItems: "center",
+      marginBottom: isLast ? "0" : "8px",
+    }}
+  >
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: `${barWidth}%`,
+        backgroundColor: "#10b981",
+        opacity: 0.25,
+        borderRadius: "6px",
+        paddingTop: "8px",
+        paddingBottom: "8px",
+      }}
+    />
+    <div
+      style={{
+        position: "relative",
+        zIndex: 10,
+        marginLeft: "8px",
+        marginRight: "8px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        width: "100%",
+      }}
+    >
+      {favicon ? (
+        <div style={{ display: "flex", alignItems: "center", gap: "4px", overflow: "hidden" }}>
+          <img src={favicon} alt="" width="16" height="16" style={{ flexShrink: 0 }} />
+          <Text className={labelClassName || "text-darkText text-sm m-0 truncate"}>{value}</Text>
+        </div>
+      ) : (
+        <Text className={labelClassName || "text-darkText text-sm m-0"}>{value}</Text>
+      )}
+      <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
+        <Text className="text-mutedText text-xs m-0">{safeToFixed(percentage, 1)}%</Text>
+        <Text className="text-darkText text-sm font-medium m-0">{formatNumber(count)}</Text>
+      </div>
+    </div>
+  </div>
+);
+
+const TopListSection = ({ title, items, renderLabel, showFavicon, labelClassName, className }: TopListSectionProps) => {
+  if (items.length === 0) return null;
+
+  const ratio = items[0]?.percentage ? 100 / items[0].percentage : 1;
+
+  return (
+    <div className={className || "bg-cardBg border border-borderColor rounded-lg p-4 mb-4"}>
+      <Text className="text-darkText text-sm font-semibold mb-3 mt-0">{title}</Text>
+      {items.map((item, index) => {
+        const barWidth = (item.percentage ?? 0) * ratio;
+        const favicon = showFavicon ? `https://www.google.com/s2/favicons?domain=${item.value}&sz=16` : undefined;
+
+        return (
+          <TopListItem
+            key={index}
+            value={typeof renderLabel(item) === "string" ? (renderLabel(item) as string) : item.value}
+            percentage={item.percentage}
+            count={item.count}
+            barWidth={barWidth}
+            isLast={index === items.length - 1}
+            favicon={favicon}
+            labelClassName={labelClassName}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
 export const WeeklyReportEmail = ({ userName, organizationReport }: WeeklyReportEmailProps) => {
   const currentYear = new Date().getFullYear();
 
@@ -134,367 +252,71 @@ export const WeeklyReportEmail = ({ userName, organizationReport }: WeeklyReport
               <Section key={site.siteId} className="mb-10">
                 {/* Metrics Cards */}
                 <div className="grid grid-cols-2 gap-3 mb-6">
-                  {/* Sessions Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Sessions</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {formatNumber(site.currentWeek.sessions)}
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          site.currentWeek.sessions >= site.previousWeek.sessions ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.sessions, site.previousWeek.sessions)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  {/* Pageviews Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Pageviews</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {formatNumber(site.currentWeek.pageviews)}
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          site.currentWeek.pageviews >= site.previousWeek.pageviews ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.pageviews, site.previousWeek.pageviews)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  {/* Users Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Unique Users</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {formatNumber(site.currentWeek.users)}
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          site.currentWeek.users >= site.previousWeek.users ? "text-positive" : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.users, site.previousWeek.users)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  {/* Avg Duration Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Avg Duration</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {formatDuration(site.currentWeek.session_duration)}
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          site.currentWeek.session_duration >= site.previousWeek.session_duration
-                            ? "text-positive"
-                            : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.session_duration, site.previousWeek.session_duration)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  {/* Pages/Session Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Pages/Session</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {safeToFixed(site.currentWeek.pages_per_session, 1)}
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          (site.currentWeek.pages_per_session ?? 0) >= (site.previousWeek.pages_per_session ?? 0)
-                            ? "text-positive"
-                            : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.pages_per_session, site.previousWeek.pages_per_session)}
-                      </Text>
-                    </div>
-                  </div>
-
-                  {/* Bounce Rate Card */}
-                  <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                    <Text className="text-mutedText text-xs mb-1 mt-0">Bounce Rate</Text>
-                    <div className="flex items-baseline gap-2">
-                      <Text className="text-darkText text-2xl font-bold m-0">
-                        {safeToFixed(site.currentWeek.bounce_rate, 1)}%
-                      </Text>
-                      <Text
-                        className={`text-xs font-medium m-0 ${
-                          (site.currentWeek.bounce_rate ?? 0) <= (site.previousWeek.bounce_rate ?? 0)
-                            ? "text-positive"
-                            : "text-negative"
-                        }`}
-                      >
-                        {calculateGrowth(site.currentWeek.bounce_rate, site.previousWeek.bounce_rate)}
-                      </Text>
-                    </div>
-                  </div>
+                  <MetricCard
+                    label="Sessions"
+                    currentValue={formatNumber(site.currentWeek.sessions)}
+                    growth={calculateGrowth(site.currentWeek.sessions, site.previousWeek.sessions)}
+                    isPositive={site.currentWeek.sessions >= site.previousWeek.sessions}
+                  />
+                  <MetricCard
+                    label="Pageviews"
+                    currentValue={formatNumber(site.currentWeek.pageviews)}
+                    growth={calculateGrowth(site.currentWeek.pageviews, site.previousWeek.pageviews)}
+                    isPositive={site.currentWeek.pageviews >= site.previousWeek.pageviews}
+                  />
+                  <MetricCard
+                    label="Unique Users"
+                    currentValue={formatNumber(site.currentWeek.users)}
+                    growth={calculateGrowth(site.currentWeek.users, site.previousWeek.users)}
+                    isPositive={site.currentWeek.users >= site.previousWeek.users}
+                  />
+                  <MetricCard
+                    label="Avg Duration"
+                    currentValue={formatDuration(site.currentWeek.session_duration)}
+                    growth={calculateGrowth(site.currentWeek.session_duration, site.previousWeek.session_duration)}
+                    isPositive={site.currentWeek.session_duration >= site.previousWeek.session_duration}
+                  />
+                  <MetricCard
+                    label="Pages/Session"
+                    currentValue={safeToFixed(site.currentWeek.pages_per_session, 1)}
+                    growth={calculateGrowth(site.currentWeek.pages_per_session, site.previousWeek.pages_per_session)}
+                    isPositive={(site.currentWeek.pages_per_session ?? 0) >= (site.previousWeek.pages_per_session ?? 0)}
+                  />
+                  <MetricCard
+                    label="Bounce Rate"
+                    currentValue={`${safeToFixed(site.currentWeek.bounce_rate, 1)}%`}
+                    growth={calculateGrowth(site.currentWeek.bounce_rate, site.previousWeek.bounce_rate)}
+                    isPositive={(site.currentWeek.bounce_rate ?? 0) <= (site.previousWeek.bounce_rate ?? 0)}
+                  />
                 </div>
 
                 {/* Top Lists Section */}
                 <div className="mb-6">
-                  {/* Top Countries */}
-                  {site.topCountries.length > 0 && (
-                    <div className="bg-cardBg border border-borderColor rounded-lg p-4 mb-4">
-                      <Text className="text-darkText text-sm font-semibold mb-3 mt-0">Top Countries</Text>
-                      {site.topCountries.map((country, index) => {
-                        const ratio = site.topCountries[0]?.percentage ? 100 / site.topCountries[0].percentage : 1;
-                        const barWidth = (country.percentage ?? 0) * ratio;
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              position: "relative",
-                              height: "24px",
-                              display: "flex",
-                              alignItems: "center",
-                              marginBottom: index < site.topCountries.length - 1 ? "8px" : "0",
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                width: `${barWidth}%`,
-                                backgroundColor: "#10b981",
-                                opacity: 0.25,
-                                borderRadius: "6px",
-                                paddingTop: "8px",
-                                paddingBottom: "8px",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "relative",
-                                zIndex: 10,
-                                marginLeft: "8px",
-                                marginRight: "8px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                width: "100%",
-                              }}
-                            >
-                              <Text className="text-darkText text-sm m-0">{getCountryDisplay(country.value)}</Text>
-                              <div className="flex items-center gap-3">
-                                <Text className="text-mutedText text-xs m-0">
-                                  {safeToFixed(country.percentage, 1)}%
-                                </Text>
-                                <Text className="text-darkText text-sm font-medium m-0">
-                                  {formatNumber(country.count)}
-                                </Text>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Top Pages */}
-                  {site.topPages.length > 0 && (
-                    <div className="bg-cardBg border border-borderColor rounded-lg p-4 mb-4">
-                      <Text className="text-darkText text-sm font-semibold mb-3 mt-0">Top Pages</Text>
-                      {site.topPages.map((page, index) => {
-                        const ratio = site.topPages[0]?.percentage ? 100 / site.topPages[0].percentage : 1;
-                        const barWidth = (page.percentage ?? 0) * ratio;
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              position: "relative",
-                              height: "24px",
-                              display: "flex",
-                              alignItems: "center",
-                              marginBottom: index < site.topPages.length - 1 ? "8px" : "0",
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                width: `${barWidth}%`,
-                                backgroundColor: "#10b981",
-                                opacity: 0.25,
-                                borderRadius: "6px",
-                                paddingTop: "8px",
-                                paddingBottom: "8px",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "relative",
-                                zIndex: 10,
-                                marginLeft: "8px",
-                                marginRight: "8px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                width: "100%",
-                              }}
-                            >
-                              <Text className="text-darkText text-sm m-0 truncate max-w-[280px]">{page.value}</Text>
-                              <div className="flex items-center gap-3">
-                                <Text className="text-mutedText text-xs m-0">{safeToFixed(page.percentage, 1)}%</Text>
-                                <Text className="text-darkText text-sm font-medium m-0">
-                                  {formatNumber(page.count)}
-                                </Text>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Top Referrers */}
-                  {site.topReferrers.length > 0 && (
-                    <div className="bg-cardBg border border-borderColor rounded-lg p-4 mb-4">
-                      <Text className="text-darkText text-sm font-semibold mb-3 mt-0">Top Referrers</Text>
-                      {site.topReferrers.map((referrer, index) => {
-                        const ratio = site.topReferrers[0]?.percentage ? 100 / site.topReferrers[0].percentage : 1;
-                        const barWidth = (referrer.percentage ?? 0) * ratio;
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              position: "relative",
-                              height: "24px",
-                              display: "flex",
-                              alignItems: "center",
-                              marginBottom: index < site.topReferrers.length - 1 ? "8px" : "0",
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                width: `${barWidth}%`,
-                                backgroundColor: "#10b981",
-                                opacity: 0.25,
-                                borderRadius: "6px",
-                                paddingTop: "8px",
-                                paddingBottom: "8px",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "relative",
-                                zIndex: 10,
-                                marginLeft: "8px",
-                                marginRight: "8px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                width: "100%",
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: "4px", overflow: "hidden" }}>
-                                <img
-                                  src={`https://www.google.com/s2/favicons?domain=${referrer.value}&sz=16`}
-                                  alt=""
-                                  width="16"
-                                  height="16"
-                                  style={{ flexShrink: 0 }}
-                                />
-                                <Text className="text-darkText text-sm m-0 truncate">{referrer.value}</Text>
-                              </div>
-                              <div className="flex items-center gap-3" style={{ flexShrink: 0 }}>
-                                <Text className="text-mutedText text-xs m-0">
-                                  {safeToFixed(referrer.percentage, 1)}%
-                                </Text>
-                                <Text className="text-darkText text-sm font-medium m-0">
-                                  {formatNumber(referrer.count)}
-                                </Text>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Device Breakdown */}
-                  {site.deviceBreakdown.length > 0 && (
-                    <div className="bg-cardBg border border-borderColor rounded-lg p-4">
-                      <Text className="text-darkText text-sm font-semibold mb-3 mt-0">Device Breakdown</Text>
-                      {site.deviceBreakdown.map((device, index) => {
-                        const ratio = site.deviceBreakdown[0]?.percentage
-                          ? 100 / site.deviceBreakdown[0].percentage
-                          : 1;
-                        const barWidth = (device.percentage ?? 0) * ratio;
-                        return (
-                          <div
-                            key={index}
-                            style={{
-                              position: "relative",
-                              height: "24px",
-                              display: "flex",
-                              alignItems: "center",
-                              marginBottom: index < site.deviceBreakdown.length - 1 ? "8px" : "0",
-                            }}
-                          >
-                            <div
-                              style={{
-                                position: "absolute",
-                                top: 0,
-                                left: 0,
-                                right: 0,
-                                bottom: 0,
-                                width: `${barWidth}%`,
-                                backgroundColor: "#10b981",
-                                opacity: 0.25,
-                                borderRadius: "6px",
-                                paddingTop: "8px",
-                                paddingBottom: "8px",
-                              }}
-                            />
-                            <div
-                              style={{
-                                position: "relative",
-                                zIndex: 10,
-                                marginLeft: "8px",
-                                marginRight: "8px",
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                width: "100%",
-                              }}
-                            >
-                              <Text className="text-darkText text-sm m-0 capitalize">{device.value}</Text>
-                              <div className="flex items-center gap-3">
-                                <Text className="text-mutedText text-xs m-0">{safeToFixed(device.percentage, 1)}%</Text>
-                                <Text className="text-darkText text-sm font-medium m-0">
-                                  {formatNumber(device.count)}
-                                </Text>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  <TopListSection
+                    title="Top Countries"
+                    items={site.topCountries}
+                    renderLabel={item => getCountryDisplay(item.value)}
+                  />
+                  <TopListSection
+                    title="Top Pages"
+                    items={site.topPages}
+                    renderLabel={item => item.value}
+                    labelClassName="text-darkText text-sm m-0 truncate max-w-[280px]"
+                  />
+                  <TopListSection
+                    title="Top Referrers"
+                    items={site.topReferrers}
+                    renderLabel={item => item.value}
+                    showFavicon={true}
+                    labelClassName="text-darkText text-sm m-0 truncate"
+                  />
+                  <TopListSection
+                    title="Device Breakdown"
+                    items={site.deviceBreakdown}
+                    renderLabel={item => item.value}
+                    labelClassName="text-darkText text-sm m-0 capitalize"
+                    className="bg-cardBg border border-borderColor rounded-lg p-4"
+                  />
                 </div>
 
                 {/* Dashboard Link */}
