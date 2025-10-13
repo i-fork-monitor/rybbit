@@ -28,6 +28,12 @@ First, set up Rybbit to expose ports without the built-in webserver:
 ./setup.sh your.domain.name --no-webserver
 ```
 
+Optionally, include a Mapbox token for globe visualizations:
+
+```bash
+./setup.sh your.domain.name --no-webserver --mapbox-token YOUR_MAPBOX_TOKEN
+```
+
 This will expose:
 - Backend service on port 3001
 - Client service on port 3002
@@ -184,6 +190,9 @@ If you need to use custom ports for Rybbit:
 
 ```bash
 ./setup.sh your.domain.name --no-webserver --backend-port 8080 --client-port 8081
+
+# With Mapbox token
+./setup.sh your.domain.name --no-webserver --backend-port 8080 --client-port 8081 --mapbox-token YOUR_MAPBOX_TOKEN
 ```
 
 Update your Nginx configuration accordingly:

@@ -68,6 +68,17 @@ cd rybbit
 </Step>
 
 <Step>
+### Get a Mapbox Token (Optional but Recommended)
+
+To enable <a href="https://demo.rybbit.io/21/globe" target="_blank">globe visualizations</a> in Rybbit, you'll need a Mapbox API token:
+
+1. Sign up for a free account at [mapbox.com](https://www.mapbox.com/)
+2. Go to your [account dashboard](https://account.mapbox.com/)
+3. Copy your default public token, or create a new token
+
+</Step>
+
+<Step>
 ### Run the Setup Script
 
 The repository includes a setup script that configures the necessary environment variables (including generating a secure secret) and starts the application using Docker Compose.
@@ -80,16 +91,17 @@ The repository includes a setup script that configures the necessary environment
 </Callout>
 
 Run the setup script, replacing `your.domain.name` with the domain or subdomain you configured in the prerequisites:
+
 ```bash
-./setup.sh your.domain.name
+./setup.sh your.domain.name --mapbox-token YOUR_MAPBOX_TOKEN
 ```
 
 The script will create a `.env` file and then build and start the containers. This might take a few minutes the first time.
 
 <Callout type="info">
   By default, we assume you are on a blank VPS and automatically setup a Caddy webserver. If you want to use your own webserver or need more control over the setup, check out:
-  - [Manual Docker Compose Setup](/docs/self-hosting-manual) - For users with existing reverse proxies or deployment tools
-  - [Advanced Self-Hosting Guide](/docs/self-hosting-advanced) - For custom configurations and Nginx setup
+  - [Manual Docker Compose Setup](/docs/self-hosting-guides/self-hosting-manual) - For users with existing reverse proxies or deployment tools
+  - [Advanced Self-Hosting Guide](/docs/self-hosting-guides/self-hosting-advanced) - For custom configurations and Nginx setup
 </Callout>
 </Step>
 
