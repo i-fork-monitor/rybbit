@@ -2,7 +2,7 @@ import BoringAvatar from "boring-avatars";
 import { round } from "lodash";
 import { DateTime } from "luxon";
 import mapboxgl from "mapbox-gl";
-import { createElement, useEffect, useRef } from "react";
+import { createElement, useEffect, useRef, useState } from "react";
 // @ts-ignore - React 19 has built-in types
 import { renderToStaticMarkup } from "react-dom/server";
 import * as CountryFlags from "country-flag-icons/react/3x2";
@@ -28,6 +28,7 @@ import {
 import { useTimelineSessions } from "./useTimelineSessions";
 import { generateName } from "../../../../components/Avatar";
 import { formatShortDuration, hour12, userLocale } from "../../../../lib/dateTimeUtils";
+import type { GetSessionsResponse } from "../../../../api/analytics/userSessions";
 
 // Generate avatar SVG using boring-avatars
 function generateAvatarSVG(userId: string, size: number): string {
@@ -196,6 +197,7 @@ export function useTimelineLayer({
   const { activeSessions } = useTimelineSessions();
   const popupRef = useRef<mapboxgl.Popup | null>(null);
   const markersMapRef = useRef<Map<string, { marker: mapboxgl.Marker; element: HTMLDivElement }>>(new Map());
+  const [selectedSession, setSelectedSession] = useState<GetSessionsResponse[number] | null>(null);
 
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
@@ -212,6 +214,17 @@ export function useTimelineLayer({
     }
 
     const markersMap = markersMapRef.current;
+
+    // Add global click handler to close tooltip when clicking outside
+    const handleMapClick = () => {
+      if (popupRef.current && popupRef.current.isOpen()) {
+        popupRef.current.remove();
+      }
+    };
+
+    if (map.current) {
+      map.current.on("click", handleMapClick);
+    }
 
     // Hide all markers if not in timeline view
     if (mapView !== "timeline") {
@@ -275,16 +288,15 @@ export function useTimelineLayer({
             .setLngLat([roundedLon, roundedLat])
             .addTo(map.current);
 
-          // Add hover events for tooltip with debouncing
-          let hideTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-          const showTooltip = () => {
+          // Add click event for tooltip
+          const toggleTooltip = (e: MouseEvent) => {
+            e.stopPropagation();
             if (!map.current || !popupRef.current) return;
 
-            // Clear any pending hide
-            if (hideTimeoutId) {
-              clearTimeout(hideTimeoutId);
-              hideTimeoutId = null;
+            // If tooltip is already visible, hide it
+            if (popupRef.current.isOpen()) {
+              popupRef.current.remove();
+              return;
             }
 
             const avatarSVG = generateAvatarSVG(session.user_id, 36);
@@ -310,6 +322,19 @@ export function useTimelineLayer({
             const eventIconSVG = renderToStaticMarkup(
               createElement(MousePointerClick, { size: 14, className: "inline-block text-amber-400" })
             );
+
+            // Referrer/Channel display
+            const domain = extractDomain(session.referrer);
+            let referrerIconSVG = "";
+            let referrerText = "";
+
+            if (domain) {
+              referrerText = getDisplayName(domain);
+              referrerIconSVG = getChannelIcon(session.channel);
+            } else {
+              referrerText = session.channel;
+              referrerIconSVG = getChannelIcon(session.channel);
+            }
 
             const name = generateName(session.user_id);
 
@@ -340,28 +365,40 @@ export function useTimelineLayer({
                     <span>${session.events || 0}</span>
                   </span>
                 </div>
+                <div class="flex items-center gap-1.5">
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-800 text-neutral-300 text-xs">
+                    ${referrerIconSVG}
+                    <span>${referrerText}</span>
+                  </span>
+                </div>
                 <div class="flex items-center gap-2 text-xs text-neutral-400 pt-1.5 border-t border-neutral-700">
                   <span>${startTime}</span>
                   <span class="text-neutral-500">•</span>
                   <span>${durationDisplay}</span>
                 </div>
+                <button
+                  class="view-session-btn w-full mt-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+                  data-session-id="${session.session_id}"
+                >
+                  View Details
+                </button>
               </div>
             `;
 
             popupRef.current.setLngLat([roundedLon, roundedLat]).setHTML(html).addTo(map.current);
+
+            // Add click handler to the button
+            const button = document.querySelector(`[data-session-id="${session.session_id}"]`);
+            if (button) {
+              button.addEventListener("click", (e) => {
+                e.stopPropagation();
+                setSelectedSession(session);
+                popupRef.current?.remove();
+              });
+            }
           };
 
-          const hideTooltip = () => {
-            // Delay hiding to prevent flicker
-            hideTimeoutId = setTimeout(() => {
-              if (popupRef.current) {
-                popupRef.current.remove();
-              }
-            }, 100);
-          };
-
-          avatarContainer.addEventListener("mouseenter", showTooltip);
-          avatarContainer.addEventListener("mouseleave", hideTooltip);
+          avatarContainer.addEventListener("click", toggleTooltip);
 
           // Store marker
           markersMap.set(session.session_id, { marker, element: avatarContainer });
@@ -373,6 +410,14 @@ export function useTimelineLayer({
       if (mapView !== "timeline") {
         markersMap.forEach(({ marker }) => marker.remove());
       }
+      if (map.current) {
+        map.current.off("click", handleMapClick);
+      }
     };
   }, [activeSessions, mapLoaded, map, mapView]);
+
+  return {
+    selectedSession,
+    setSelectedSession,
+  };
 }

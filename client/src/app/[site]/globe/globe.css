@@ -1,6 +1,6 @@
 /* Globe Mapbox Popup Styling */
 .mapboxgl-popup.globe-tooltip {
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .mapboxgl-popup.globe-tooltip .mapboxgl-popup-content {
@@ -9,7 +9,7 @@
   border-radius: 0;
   padding: 0;
   box-shadow: none;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .mapboxgl-popup.globe-tooltip .mapboxgl-popup-tip {

@@ -6,6 +6,8 @@ import "./globe.css";
 
 import { DisabledOverlay } from "../../../components/DisabledOverlay";
 import { NothingFound } from "../../../components/NothingFound";
+import { SessionCard } from "../../../components/Sessions/SessionCard";
+import { Dialog, DialogContent } from "../../../components/ui/dialog";
 import { useSetPageTitle } from "../../../hooks/useSetPageTitle";
 import { SubHeader } from "../components/SubHeader/SubHeader";
 import { GlobeSessions } from "./components/GlobeSessions";
@@ -46,7 +48,7 @@ export default function GlobePage() {
     mapView,
   });
 
-  useTimelineLayer({
+  const { selectedSession, setSelectedSession } = useTimelineLayer({
     map,
     mapLoaded,
     mapView,
@@ -95,6 +97,12 @@ export default function GlobePage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={!!selectedSession} onOpenChange={open => !open && setSelectedSession(null)}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          {selectedSession && <SessionCard session={selectedSession} />}
+        </DialogContent>
+      </Dialog>
     </DisabledOverlay>
   );
 }
