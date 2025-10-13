@@ -112,7 +112,7 @@ export function TimelineScrubber() {
   }
 
   return (
-    <div className="w-[calc(100%-32px)] flex flex-col">
+    <div className="w-full flex flex-col">
       {/* Session histogram */}
       <div className="w-full h-8 flex items-end gap-[1px]">
         {sessionCounts.map((count, index) => {

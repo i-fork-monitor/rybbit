@@ -150,7 +150,9 @@ export function useTimelineLayer({
   const { activeSessions } = useTimelineSessions();
   const { currentTime } = useTimelineStore();
   const popupRef = useRef<mapboxgl.Popup | null>(null);
-  const markersMapRef = useRef<Map<string, { marker: mapboxgl.Marker; element: HTMLDivElement }>>(new Map());
+  const markersMapRef = useRef<
+    Map<string, { marker: mapboxgl.Marker; element: HTMLDivElement; cleanup: () => void }>
+  >(new Map());
   const openTooltipSessionIdRef = useRef<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<GetSessionsResponse[number] | null>(null);
 
@@ -192,8 +194,16 @@ export function useTimelineLayer({
 
     // Hide all markers if not in timeline view
     if (mapView !== "timeline") {
-      markersMap.forEach(({ marker }) => marker.remove());
-      return;
+      markersMap.forEach(({ marker, cleanup }) => {
+        cleanup(); // Remove event listeners
+        marker.remove();
+      });
+      // Still need to return cleanup function to remove map click handler
+      return () => {
+        if (map.current) {
+          map.current.off("click", handleMapClick);
+        }
+      };
     }
 
     // Build set of active session IDs
@@ -201,8 +211,9 @@ export function useTimelineLayer({
 
     // Remove markers for sessions that are no longer active
     const toRemove: string[] = [];
-    markersMap.forEach(({ marker }, sessionId) => {
+    markersMap.forEach(({ marker, cleanup }, sessionId) => {
       if (!activeSessionIds.has(sessionId)) {
+        cleanup(); // Remove event listeners
         marker.remove();
         toRemove.push(sessionId);
       }
@@ -346,6 +357,7 @@ export function useTimelineLayer({
                 <button
                   class="view-session-btn w-full px-2 py-1 bg-accent-600 hover:bg-accent-700 text-white text-xs font-medium rounded transition-colors"
                   data-session-id="${session.session_id}"
+                  tabindex="-1"
                 >
                   View Details
                 </button>
@@ -369,16 +381,23 @@ export function useTimelineLayer({
 
         avatarContainer.addEventListener("click", toggleTooltip);
 
-        // Store marker
-        markersMap.set(session.session_id, { marker, element: avatarContainer });
+        // Create cleanup function to remove event listener
+        const cleanup = () => {
+          avatarContainer.removeEventListener("click", toggleTooltip);
+        };
+
+        // Store marker with cleanup function
+        markersMap.set(session.session_id, { marker, element: avatarContainer, cleanup });
       }
     });
 
     // Cleanup function
     return () => {
-      if (mapView !== "timeline") {
-        markersMap.forEach(({ marker }) => marker.remove());
-      }
+      // Clean up all markers and their event listeners
+      markersMap.forEach(({ marker, cleanup }) => {
+        cleanup(); // Remove event listeners
+        marker.remove();
+      });
       if (map.current) {
         map.current.off("click", handleMapClick);
       }
