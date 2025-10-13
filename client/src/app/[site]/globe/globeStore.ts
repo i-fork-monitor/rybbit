@@ -7,6 +7,6 @@ interface GlobeStore {
 }
 
 export const useGlobeStore = create<GlobeStore>(set => ({
-  mapView: "coordinates",
+  mapView: "timeline",
   setMapView: view => set({ mapView: view }),
 }));

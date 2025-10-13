@@ -20,13 +20,13 @@ export default function MapViewSelector() {
     <Tabs value={mapViewToTab[mapView]}>
       <ScrollArea>
         <TabsList>
-          <TabsTrigger value="tab-1" className="group" onClick={() => setMapView("coordinates")}>
-            <Radio className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
-            Coordinates
-          </TabsTrigger>
           <TabsTrigger value="tab-4" className="group" onClick={() => setMapView("timeline")}>
             <Clock className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
             Timeline
+          </TabsTrigger>
+          <TabsTrigger value="tab-1" className="group" onClick={() => setMapView("coordinates")}>
+            <Radio className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
+            Coordinates
           </TabsTrigger>
           <TabsTrigger value="tab-2" onClick={() => setMapView("countries")}>
             <Globe2 className="-ms-0.5 me-1.5 opacity-60" size={16} aria-hidden="true" />
