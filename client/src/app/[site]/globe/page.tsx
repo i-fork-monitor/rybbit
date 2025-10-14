@@ -25,6 +25,7 @@ import { useTimelineStore } from "./timelineStore";
 import { useTimelineSessions } from "./hooks/timelineLayer/useTimelineSessions";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../components/ui/select";
 import { WINDOW_SIZE_OPTIONS } from "./timelineUtils";
+import { useConfigs } from "../../../lib/configs";
 
 export default function GlobePage() {
   useSetPageTitle("Rybbit · Globe");
@@ -71,11 +72,7 @@ export default function GlobePage() {
 
   useLayerVisibility(map, mapView, mapLoaded);
 
-  console.info({
-    NEXT_PUBLIC_MAPBOX_TOKEN: process.env.NEXT_PUBLIC_MAPBOX_TOKEN,
-    NEXT_PUBLIC_CLOUD: process.env.NEXT_PUBLIC_CLOUD,
-    NEXT_PUBLIC_BACKEND_URL: process.env.NEXT_PUBLIC_BACKEND_URL,
-  });
+  const { configs, isLoading } = useConfigs();
 
   return (
     <DisabledOverlay message="Globe" featurePath="globe">
@@ -84,12 +81,12 @@ export default function GlobePage() {
           <SubHeader />
         </div>
         <div className="absolute top-0 left-0 right-0 bottom-0 z-10">
-          {process.env.NEXT_PUBLIC_MAPBOX_TOKEN ? (
+          {configs?.mapboxToken ? (
             <div
               ref={mapContainer}
               className="w-full h-full [&_.mapboxgl-ctrl-bottom-left]:!hidden [&_.mapboxgl-ctrl-logo]:!hidden"
             />
-          ) : (
+          ) : isLoading ? null : (
             <div className="w-full h-full flex items-center justify-center">
               <NothingFound
                 title="Mapbox access token not found"
