@@ -1,15 +1,12 @@
 import mapboxgl from "mapbox-gl";
-import { round } from "lodash";
+import { isNil, round } from "lodash";
 import type { GetSessionsResponse } from "../../../../../api/analytics/userSessions";
 import { CLUSTER_LAYER_ID, CLUSTER_COUNT_LAYER_ID, SOURCE_ID } from "./timelineLayerConstants";
 
 /**
  * Toggle visibility of cluster layers
  */
-export function setClusterLayersVisibility(
-  mapInstance: mapboxgl.Map,
-  visible: boolean
-): void {
+export function setClusterLayersVisibility(mapInstance: mapboxgl.Map, visible: boolean): void {
   const visibility = visible ? "visible" : "none";
 
   if (mapInstance.getLayer(CLUSTER_LAYER_ID)) {
@@ -23,17 +20,14 @@ export function setClusterLayersVisibility(
 /**
  * Update the GeoJSON data source with active sessions
  */
-export function updateGeoJSONData(
-  mapInstance: mapboxgl.Map,
-  activeSessions: GetSessionsResponse
-): void {
+export function updateGeoJSONData(mapInstance: mapboxgl.Map, activeSessions: GetSessionsResponse): void {
   const source = mapInstance.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource;
   if (!source) return;
 
   const geojson: GeoJSON.FeatureCollection = {
     type: "FeatureCollection",
     features: activeSessions
-      .filter(s => s.lat && s.lon)
+      .filter(s => !isNil(s.lat) && !isNil(s.lon))
       .map(session => ({
         type: "Feature",
         properties: session,

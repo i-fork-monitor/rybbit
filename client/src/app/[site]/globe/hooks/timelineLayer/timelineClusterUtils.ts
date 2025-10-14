@@ -1,5 +1,5 @@
 import mapboxgl from "mapbox-gl";
-import { round } from "lodash";
+import { isNil, round } from "lodash";
 import type { GetSessionsResponse } from "../../../../../api/analytics/userSessions";
 import { SOURCE_ID, MIN_CLUSTER_SIZE } from "./timelineLayerConstants";
 
@@ -15,7 +15,7 @@ export async function getUnclusteredFeatures(
   if (!shouldShowClusters) {
     // When clustering is disabled, show all sessions as individual markers
     return activeSessions
-      .filter(s => s.lat && s.lon)
+      .filter(s => !isNil(s.lat) && !isNil(s.lon))
       .map(session => ({
         properties: session,
         geometry: {

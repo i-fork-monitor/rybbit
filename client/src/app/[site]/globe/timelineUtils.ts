@@ -85,31 +85,36 @@ export function getActiveSessions(
 
 /**
  * Optimized function to count sessions per time window
- * Uses parsing once + sorting + binary search for significant speedup
+ * Uses sweep-line algorithm with binary search for O(W log N) complexity
  */
 export function getSessionCountsPerWindow(
   sessions: GetSessionsResponse,
   timeWindows: DateTime[],
   windowSize: number
 ): number[] {
-  // Parse all session times once upfront
-  const parsedSessions = sessions.map(session => ({
-    start: DateTime.fromSQL(session.session_start, { zone: "utc" }).toLocal(),
-    end: DateTime.fromSQL(session.session_end, { zone: "utc" }).toLocal(),
-  }));
+  // Parse all session times once upfront and convert to epoch ms
+  const startTimes: number[] = [];
+  const endTimes: number[] = [];
 
-  // Sort sessions by start time for efficient searching
-  parsedSessions.sort((a, b) => a.start.toMillis() - b.start.toMillis());
+  for (const session of sessions) {
+    const start = DateTime.fromSQL(session.session_start, { zone: "utc" }).toLocal();
+    const end = DateTime.fromSQL(session.session_end, { zone: "utc" }).toLocal();
+    startTimes.push(start.toMillis());
+    endTimes.push(end.toMillis());
+  }
 
-  // Binary search to find first session that could overlap with a window
-  const findFirstOverlapping = (windowStart: DateTime): number => {
+  // Sort both arrays independently
+  startTimes.sort((a, b) => a - b);
+  endTimes.sort((a, b) => a - b);
+
+  // Binary search to find first index where value >= target
+  const findFirstGTE = (arr: number[], target: number): number => {
     let left = 0;
-    let right = parsedSessions.length;
+    let right = arr.length;
 
-    // Find first session where session.end > windowStart
     while (left < right) {
       const mid = Math.floor((left + right) / 2);
-      if (parsedSessions[mid].end <= windowStart) {
+      if (arr[mid] < target) {
         left = mid + 1;
       } else {
         right = mid;
@@ -118,33 +123,34 @@ export function getSessionCountsPerWindow(
     return left;
   };
 
-  // Count sessions for each window
-  const counts = timeWindows.map(windowStart => {
-    const windowEnd = windowStart.plus({ minutes: windowSize });
-    let count = 0;
+  // Binary search to find first index where value > target
+  const findFirstGT = (arr: number[], target: number): number => {
+    let left = 0;
+    let right = arr.length;
 
-    // Start from first potentially overlapping session
-    const startIdx = findFirstOverlapping(windowStart);
-
-    // Count until sessions can no longer overlap
-    for (let i = startIdx; i < parsedSessions.length; i++) {
-      const session = parsedSessions[i];
-
-      // If session starts after window ends, no more sessions can overlap
-      if (session.start >= windowEnd) {
-        break;
-      }
-
-      // Session overlaps if it starts before window ends AND ends after window starts
-      if (session.start < windowEnd && session.end > windowStart) {
-        count++;
+    while (left < right) {
+      const mid = Math.floor((left + right) / 2);
+      if (arr[mid] <= target) {
+        left = mid + 1;
+      } else {
+        right = mid;
       }
     }
+    return left;
+  };
 
-    return count;
+  // Count sessions for each window using sweep-line
+  return timeWindows.map(windowStart => {
+    const windowEnd = windowStart.plus({ minutes: windowSize });
+    const windowStartMs = windowStart.toMillis();
+    const windowEndMs = windowEnd.toMillis();
+
+    // Count = (sessions that started before window end) - (sessions that ended at or before window start)
+    const startsBeforeEnd = findFirstGTE(startTimes, windowEndMs);
+    const endsBeforeOrAtStart = findFirstGT(endTimes, windowStartMs);
+
+    return startsBeforeEnd - endsBeforeOrAtStart;
   });
-
-  return counts;
 }
 
 /**
