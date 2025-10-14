@@ -138,6 +138,11 @@ function getOSIconPath(os: string): string {
   return OS_TO_LOGO[os] ? `/operating-systems/${OS_TO_LOGO[os]}` : "";
 }
 
+const SOURCE_ID = "timeline-sessions";
+const CLUSTER_LAYER_ID = "timeline-clusters";
+const CLUSTER_COUNT_LAYER_ID = "timeline-cluster-count";
+const UNCLUSTERED_LAYER_ID = "timeline-unclustered-point";
+
 export function useTimelineLayer({
   map,
   mapLoaded,
@@ -164,8 +169,11 @@ export function useTimelineLayer({
     }
   }, [currentTime]);
 
+  // Initialize Mapbox source and layers for clustering
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
+
+    const mapInstance = map.current;
 
     // Initialize popup once
     if (!popupRef.current) {
@@ -174,95 +182,293 @@ export function useTimelineLayer({
         closeOnClick: false,
         className: "globe-tooltip",
         anchor: "top-left",
-        offset: [-30, -30], // Offset to align avatar center (padding 12px + avatar 36px/2 = 30px)
+        offset: [-30, -30],
       });
     }
 
-    const markersMap = markersMapRef.current;
+    // Add source if it doesn't exist
+    if (!mapInstance.getSource(SOURCE_ID)) {
+      mapInstance.addSource(SOURCE_ID, {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
+        cluster: true,
+        clusterMaxZoom: 14,
+        clusterRadius: 30, // Less aggressive clustering
+      });
 
-    // Add global click handler to close tooltip when clicking outside
-    const handleMapClick = () => {
-      if (popupRef.current && popupRef.current.isOpen()) {
-        popupRef.current.remove();
-        openTooltipSessionIdRef.current = null;
-      }
+      // Add cluster circle layer
+      mapInstance.addLayer({
+        id: CLUSTER_LAYER_ID,
+        type: "circle",
+        source: SOURCE_ID,
+        filter: ["all", ["has", "point_count"], [">=", ["get", "point_count"], 10]],
+        paint: {
+          "circle-color": ["step", ["get", "point_count"], "#3b82f6", 10, "#2563eb", 30, "#1d4ed8"],
+          "circle-radius": ["step", ["get", "point_count"], 20, 10, 25, 30, 30],
+        },
+      });
+
+      // Add cluster count layer
+      mapInstance.addLayer({
+        id: CLUSTER_COUNT_LAYER_ID,
+        type: "symbol",
+        source: SOURCE_ID,
+        filter: ["all", ["has", "point_count"], [">=", ["get", "point_count"], 10]],
+        layout: {
+          "text-field": ["get", "point_count_abbreviated"],
+          "text-font": ["DIN Offc Pro Medium", "Arial Unicode MS Bold"],
+          "text-size": 14,
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-color": "#ffffff",
+        },
+      });
+
+      // Add unclustered point layer (hidden, used for querying)
+      mapInstance.addLayer({
+        id: UNCLUSTERED_LAYER_ID,
+        type: "circle",
+        source: SOURCE_ID,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-radius": 0,
+          "circle-opacity": 0,
+        },
+      });
+
+      // Disable transitions on cluster layers
+      mapInstance.setPaintProperty(CLUSTER_LAYER_ID, "circle-opacity-transition", { duration: 0 });
+      mapInstance.setPaintProperty(CLUSTER_LAYER_ID, "circle-radius-transition", { duration: 0 });
+      mapInstance.setPaintProperty(CLUSTER_LAYER_ID, "circle-color-transition", { duration: 0 });
+      mapInstance.setPaintProperty(CLUSTER_COUNT_LAYER_ID, "text-opacity-transition", { duration: 0 });
+    }
+
+    // Handle cluster clicks
+    const handleClusterClick = (e: mapboxgl.MapMouseEvent) => {
+      const features = mapInstance.queryRenderedFeatures(e.point, {
+        layers: [CLUSTER_LAYER_ID],
+      });
+
+      if (!features.length) return;
+
+      const clusterId = features[0].properties?.cluster_id;
+      const source = mapInstance.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource;
+
+      source.getClusterExpansionZoom(clusterId, (err, zoom) => {
+        if (err || !zoom) return;
+
+        const coordinates = (features[0].geometry as any).coordinates;
+        mapInstance.easeTo({
+          center: coordinates,
+          zoom: zoom,
+          duration: 500,
+        });
+      });
     };
 
-    if (map.current) {
-      map.current.on("click", handleMapClick);
-    }
+    // Change cursor on cluster hover
+    const handleClusterMouseEnter = () => {
+      mapInstance.getCanvas().style.cursor = "pointer";
+    };
 
-    // Hide all markers if not in timeline view
+    const handleClusterMouseLeave = () => {
+      mapInstance.getCanvas().style.cursor = "";
+    };
+
+    mapInstance.on("click", CLUSTER_LAYER_ID, handleClusterClick);
+    mapInstance.on("mouseenter", CLUSTER_LAYER_ID, handleClusterMouseEnter);
+    mapInstance.on("mouseleave", CLUSTER_LAYER_ID, handleClusterMouseLeave);
+
+    return () => {
+      mapInstance.off("click", CLUSTER_LAYER_ID, handleClusterClick);
+      mapInstance.off("mouseenter", CLUSTER_LAYER_ID, handleClusterMouseEnter);
+      mapInstance.off("mouseleave", CLUSTER_LAYER_ID, handleClusterMouseLeave);
+    };
+  }, [map, mapLoaded]);
+
+  // Update GeoJSON data and HTML markers
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const mapInstance = map.current;
+    const markersMap = markersMapRef.current;
+
+    // Hide layers and markers if not in timeline view
     if (mapView !== "timeline") {
+      // Hide layers
+      if (mapInstance.getLayer(CLUSTER_LAYER_ID)) {
+        mapInstance.setLayoutProperty(CLUSTER_LAYER_ID, "visibility", "none");
+      }
+      if (mapInstance.getLayer(CLUSTER_COUNT_LAYER_ID)) {
+        mapInstance.setLayoutProperty(CLUSTER_COUNT_LAYER_ID, "visibility", "none");
+      }
+
+      // Remove all markers
       markersMap.forEach(({ marker, cleanup }) => {
-        cleanup(); // Remove event listeners
+        cleanup();
         marker.remove();
       });
-      // Still need to return cleanup function to remove map click handler
-      return () => {
-        if (map.current) {
-          map.current.off("click", handleMapClick);
-        }
-      };
+      markersMap.clear();
+
+      return;
     }
 
-    // Build set of active session IDs
-    const activeSessionIds = new Set(activeSessions.filter(s => s.lat && s.lon).map(s => s.session_id));
+    // Show/hide cluster layers based on number of sessions
+    const shouldShowClusters = activeSessions.length > 500;
 
-    // Remove markers for sessions that are no longer active
-    const toRemove: string[] = [];
-    markersMap.forEach(({ marker, cleanup }, sessionId) => {
-      if (!activeSessionIds.has(sessionId)) {
-        cleanup(); // Remove event listeners
-        marker.remove();
-        toRemove.push(sessionId);
-      }
-    });
-    toRemove.forEach(id => markersMap.delete(id));
+    if (mapInstance.getLayer(CLUSTER_LAYER_ID)) {
+      mapInstance.setLayoutProperty(
+        CLUSTER_LAYER_ID,
+        "visibility",
+        shouldShowClusters ? "visible" : "none"
+      );
+    }
+    if (mapInstance.getLayer(CLUSTER_COUNT_LAYER_ID)) {
+      mapInstance.setLayoutProperty(
+        CLUSTER_COUNT_LAYER_ID,
+        "visibility",
+        shouldShowClusters ? "visible" : "none"
+      );
+    }
 
-    // Create or update markers for active sessions
-    activeSessions.forEach(session => {
-      if (!map.current) return;
+    const source = mapInstance.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource;
+    if (!source) return;
 
-      const roundedLat = round(session.lat, 4);
-      const roundedLon = round(session.lon, 4);
-      const existing = markersMap.get(session.session_id);
+    // Convert sessions to GeoJSON
+    const geojson: GeoJSON.FeatureCollection = {
+      type: "FeatureCollection",
+      features: activeSessions
+        .filter(s => s.lat && s.lon)
+        .map(session => ({
+          type: "Feature",
+          properties: session,
+          geometry: {
+            type: "Point",
+            coordinates: [round(session.lon, 4), round(session.lat, 4)],
+          },
+        })),
+    };
 
-      if (existing) {
-        // Update existing marker position if needed
-        const currentLngLat = existing.marker.getLngLat();
-        if (currentLngLat.lng !== roundedLon || currentLngLat.lat !== roundedLat) {
-          existing.marker.setLngLat([roundedLon, roundedLat]);
-        }
-        // Re-add marker if it was removed
-        if (!existing.marker.getElement().isConnected) {
-          existing.marker.addTo(map.current);
-        }
+    source.setData(geojson);
+
+    // Function to update HTML markers for unclustered points
+    const updateMarkers = async () => {
+      if (!mapInstance) return;
+
+      let unclusteredFeatures: any[] = [];
+
+      if (shouldShowClusters) {
+        // When clustering is enabled, show unclustered points and expand small clusters
+        const features = mapInstance.querySourceFeatures(SOURCE_ID, {
+          sourceLayer: undefined,
+        });
+
+        const source = mapInstance.getSource(SOURCE_ID) as mapboxgl.GeoJSONSource;
+
+        // Process features to handle small clusters
+        const promises: Promise<void>[] = [];
+
+        features.forEach(f => {
+          if (!f.properties) return;
+
+          if (!f.properties.cluster) {
+            // Regular unclustered point
+            unclusteredFeatures.push(f);
+          } else if (f.properties.point_count && f.properties.point_count < 10) {
+            // Small cluster - expand it to get individual points
+            const promise = new Promise<void>((resolve) => {
+              source.getClusterLeaves(
+                f.properties!.cluster_id,
+                f.properties!.point_count,
+                0,
+                (err, leaves) => {
+                  if (!err && leaves) {
+                    unclusteredFeatures.push(...leaves);
+                  }
+                  resolve();
+                }
+              );
+            });
+            promises.push(promise);
+          }
+          // Clusters with >= 10 points are shown as cluster circles, ignore them here
+        });
+
+        // Wait for all cluster expansions to complete
+        await Promise.all(promises);
       } else {
-        // Create new marker
-        const avatarContainer = document.createElement("div");
-        avatarContainer.className = "timeline-avatar-marker";
-        avatarContainer.style.cursor = "pointer";
-        avatarContainer.style.borderRadius = "50%";
-        avatarContainer.style.overflow = "hidden";
-        avatarContainer.style.width = "32px";
-        avatarContainer.style.height = "32px";
-        avatarContainer.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+        // When clustering is disabled, show all sessions as individual markers
+        unclusteredFeatures = activeSessions
+          .filter(s => s.lat && s.lon)
+          .map(session => ({
+            properties: session,
+            geometry: {
+              type: "Point" as const,
+              coordinates: [round(session.lon, 4), round(session.lat, 4)],
+            },
+          }));
+      }
 
-        // Generate avatar SVG
-        const avatarSVG = generateAvatarSVG(session.user_id, 32);
-        avatarContainer.innerHTML = avatarSVG;
+      // Build set of current session IDs
+      const currentSessionIds = new Set(
+        unclusteredFeatures.map(f => f.properties?.session_id).filter(Boolean)
+      );
 
-        // Create marker
-        const marker = new mapboxgl.Marker({
-          element: avatarContainer,
-          anchor: "center",
-        })
-          .setLngLat([roundedLon, roundedLat])
-          .addTo(map.current);
+      // Remove markers that are no longer unclustered
+      const toRemove: string[] = [];
+      markersMap.forEach(({ marker, cleanup }, sessionId) => {
+        if (!currentSessionIds.has(sessionId)) {
+          cleanup();
+          marker.remove();
+          toRemove.push(sessionId);
+        }
+      });
+      toRemove.forEach(id => markersMap.delete(id));
 
-        // Add click event for tooltip
-        const toggleTooltip = (e: MouseEvent) => {
+      // Create or update markers for unclustered sessions
+      unclusteredFeatures.forEach(feature => {
+        if (!mapInstance) return;
+
+        const session = feature.properties as GetSessionsResponse[number];
+        if (!session?.session_id) return;
+
+        const existing = markersMap.get(session.session_id);
+        const [lng, lat] = (feature.geometry as any).coordinates;
+
+        if (existing) {
+          // Update position if needed
+          const currentLngLat = existing.marker.getLngLat();
+          if (currentLngLat.lng !== lng || currentLngLat.lat !== lat) {
+            existing.marker.setLngLat([lng, lat]);
+          }
+        } else {
+          // Create new marker
+          const avatarContainer = document.createElement("div");
+          avatarContainer.className = "timeline-avatar-marker";
+          avatarContainer.style.cursor = "pointer";
+          avatarContainer.style.borderRadius = "50%";
+          avatarContainer.style.overflow = "hidden";
+          avatarContainer.style.width = "32px";
+          avatarContainer.style.height = "32px";
+          avatarContainer.style.boxShadow = "0 2px 8px rgba(0,0,0,0.3)";
+
+          const avatarSVG = generateAvatarSVG(session.user_id, 32);
+          avatarContainer.innerHTML = avatarSVG;
+
+          const marker = new mapboxgl.Marker({
+            element: avatarContainer,
+            anchor: "center",
+          })
+            .setLngLat([lng, lat])
+            .addTo(mapInstance);
+
+          // Add click event for tooltip
+          const toggleTooltip = (e: MouseEvent) => {
           e.stopPropagation();
           if (!map.current || !popupRef.current) return;
 
@@ -364,7 +570,7 @@ export function useTimelineLayer({
               </div>
             `;
 
-          popupRef.current.setLngLat([roundedLon, roundedLat]).setHTML(html).addTo(map.current);
+          popupRef.current.setLngLat([lng, lat]).setHTML(html).addTo(map.current);
           openTooltipSessionIdRef.current = session.session_id;
 
           // Add click handler to the button
@@ -381,26 +587,47 @@ export function useTimelineLayer({
 
         avatarContainer.addEventListener("click", toggleTooltip);
 
-        // Create cleanup function to remove event listener
-        const cleanup = () => {
-          avatarContainer.removeEventListener("click", toggleTooltip);
-        };
+          // Create cleanup function to remove event listener
+          const cleanup = () => {
+            avatarContainer.removeEventListener("click", toggleTooltip);
+          };
 
-        // Store marker with cleanup function
-        markersMap.set(session.session_id, { marker, element: avatarContainer, cleanup });
+          // Store marker with cleanup function
+          markersMap.set(session.session_id, { marker, element: avatarContainer, cleanup });
+        }
+      });
+    };
+
+    // Initial update
+    updateMarkers();
+
+    // Update markers on zoom and move
+    mapInstance.on("zoom", updateMarkers);
+    mapInstance.on("move", updateMarkers);
+    mapInstance.on("sourcedata", updateMarkers);
+
+    // Handle map click to close tooltip
+    const handleMapClick = () => {
+      if (popupRef.current && popupRef.current.isOpen()) {
+        popupRef.current.remove();
+        openTooltipSessionIdRef.current = null;
       }
-    });
+    };
+
+    mapInstance.on("click", handleMapClick);
 
     // Cleanup function
     return () => {
-      // Clean up all markers and their event listeners
       markersMap.forEach(({ marker, cleanup }) => {
-        cleanup(); // Remove event listeners
+        cleanup();
         marker.remove();
       });
-      if (map.current) {
-        map.current.off("click", handleMapClick);
-      }
+      markersMap.clear();
+
+      mapInstance.off("zoom", updateMarkers);
+      mapInstance.off("move", updateMarkers);
+      mapInstance.off("sourcedata", updateMarkers);
+      mapInstance.off("click", handleMapClick);
     };
   }, [activeSessions, mapLoaded, map, mapView]);
 
