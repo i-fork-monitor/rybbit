@@ -344,14 +344,14 @@ export function MapComponent({
 
     vectorLayerRef.current = vectorLayer;
     mapInstanceRef.current.addLayer(vectorLayer);
-  }, [mapView, countriesGeoData, subdivisionsGeoData, dataVersion, mode, colorScale, hoveredId, processedCountryData, processedSubdivisionData]);
+  }, [mapView, countriesGeoData, subdivisionsGeoData, dataVersion, mode, colorScale, processedCountryData, processedSubdivisionData]);
 
-  // Force layer re-render when data changes
+  // Update styles when hoveredId changes (without recreating the layer)
   useEffect(() => {
-    if (vectorLayerRef.current && (processedCountryData || processedSubdivisionData)) {
+    if (vectorLayerRef.current) {
       vectorLayerRef.current.changed();
     }
-  }, [processedCountryData, processedSubdivisionData]);
+  }, [hoveredId]);
 
   return (
     <div

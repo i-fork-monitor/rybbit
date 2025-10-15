@@ -294,14 +294,14 @@ export function PerformanceMap({ height }: { height: string }) {
 
     vectorLayerRef.current = vectorLayer;
     mapInstanceRef.current.addLayer(vectorLayer);
-  }, [countriesGeoData, dataVersion, selectedPercentile, selectedPerformanceMetric, colorScale, hoveredId, processedPerformanceData]);
+  }, [countriesGeoData, dataVersion, selectedPercentile, selectedPerformanceMetric, colorScale, processedPerformanceData]);
 
-  // Force layer re-render when data changes
+  // Update styles when hoveredId changes (without recreating the layer)
   useEffect(() => {
-    if (vectorLayerRef.current && processedPerformanceData) {
+    if (vectorLayerRef.current) {
       vectorLayerRef.current.changed();
     }
-  }, [processedPerformanceData]);
+  }, [hoveredId]);
 
   return (
     <div
