@@ -70,7 +70,6 @@ import { getSessionFromReq, mapHeaders } from "./lib/auth-utils.js";
 import { auth } from "./lib/auth.js";
 import { IS_CLOUD } from "./lib/const.js";
 import { siteConfig } from "./lib/siteConfig.js";
-import { createTurnstileAuthWrapper } from "./middleware/turnstile.js";
 import { trackEvent } from "./services/tracker/trackEvent.js";
 // need to import telemetry service here to start it
 import { telemetryService } from "./services/telemetryService.js";
@@ -164,11 +163,43 @@ server.register(fastifyStatic, {
 server.register(
   async (fastify, options) => {
     await fastify.register(async fastify => {
-      const baseAuthHandler = toNodeHandler(options.auth);
+      const authHandler = toNodeHandler(options.auth);
 
-      // Wrap the auth handler with Turnstile verification
-      const authHandler = createTurnstileAuthWrapper(baseAuthHandler, IS_CLOUD, server.log);
+      // Specific route for email signup with Turnstile verification
+      if (IS_CLOUD) {
+        fastify.post("/api/auth/sign-up/email", async (request, reply) => {
+          // Verify Turnstile token from header
+          const turnstileToken = request.headers["x-turnstile-token"] as string;
 
+          server.log.info("Turnstile verification - token received:", !!turnstileToken);
+
+          if (!turnstileToken) {
+            return reply.status(400).send({
+              error: "Captcha verification required",
+              message: "Please complete the captcha verification",
+            });
+          }
+
+          // Verify the token
+          const { verifyTurnstileToken } = await import("./lib/turnstile.js");
+          const isValid = await verifyTurnstileToken(turnstileToken, request.ip);
+
+          if (!isValid) {
+            return reply.status(400).send({
+              error: "Captcha verification failed",
+              message: "Invalid captcha. Please try again.",
+            });
+          }
+
+          server.log.info("Turnstile verification successful - passing to better-auth");
+
+          // Verification passed, forward to better-auth
+          reply.raw.setHeaders(mapHeaders(reply.getHeaders()));
+          await authHandler(request.raw, reply.raw);
+        });
+      }
+
+      // All other auth routes
       fastify.all("/api/auth/*", async (request, reply: any) => {
         reply.raw.setHeaders(mapHeaders(reply.getHeaders()));
         await authHandler(request.raw, reply.raw);
