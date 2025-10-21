@@ -92,7 +92,7 @@ fbq('track', 'PageView');`,
         <>
           <Script
             src="https://demo.rybbit.io/api/script.js"
-            data-site-id="22"
+            data-site-id="21"
             strategy="afterInteractive"
             data-web-vitals="true"
             data-track-errors="true"
