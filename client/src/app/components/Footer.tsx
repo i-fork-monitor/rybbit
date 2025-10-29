@@ -20,9 +20,14 @@ export function Footer() {
         Github
       </Link>
       {IS_CLOUD && (
-        <Link href="https://ipapi.is/" className="hover:text-neutral-300" target="_blank">
-          Geolocation by ipapi.is
-        </Link>
+        <>
+          <Link href="https://rybbit.com/contact" className="hover:text-neutral-300">
+            Support
+          </Link>
+          <Link href="https://ipapi.is/" className="hover:text-neutral-300" target="_blank">
+            Geolocation by ipapi.is
+          </Link>
+        </>
       )}
     </div>
   );
